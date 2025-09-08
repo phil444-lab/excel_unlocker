@@ -2,8 +2,6 @@ from flask import Flask, request, send_file, render_template_string, redirect, u
 import msoffcrypto
 import io
 import os
-import csv
-from openpyxl import load_workbook
 
 app = Flask(__name__)
 app.secret_key = "une_cle_ultra_secrete"
@@ -13,7 +11,7 @@ HTML_TEMPLATE = """
 <html lang="fr">
 <head>
   <meta charset="utf-8">
-  <title>Déverrouiller Excel → CSV</title>
+  <title>Déverrouiller Excel</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
@@ -28,7 +26,7 @@ HTML_TEMPLATE = """
   <!-- Navbar -->
   <nav class="navbar navbar-expand-lg navbar-dark bg-success fixed-top shadow-sm">
     <div class="container">
-      <a class="navbar-brand fw-bold" href="{{ url_for('index') }}">🔓 Excel Unlocker</a>
+      <a class="navbar-brand fw-bold" href="{{ url_for('index') }}">Excel Unlocker 🔓</a>
       <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent">
         <span class="navbar-toggler-icon"></span>
       </button>
@@ -59,7 +57,7 @@ HTML_TEMPLATE = """
                   <input class="form-control" type="password" name="password" id="password" placeholder="Entrez le mot de passe" required>
                 </div>
                 <div class="d-grid">
-                  <button type="submit" class="btn btn-success btn-lg">🔓 Déverrouiller & Convertir</button>
+                  <button type="submit" class="btn btn-success btn-lg">Déverrouiller & Télécharger</button>
                 </div>
               </form>
             </div>
@@ -116,35 +114,25 @@ def index():
             return redirect(url_for("index"))
 
         try:
-            # Déchiffrement
+            # Déchiffrement en mémoire
             office_file = msoffcrypto.OfficeFile(f)
             office_file.load_key(password=pwd)
             decrypted = io.BytesIO()
             office_file.decrypt(decrypted)
             decrypted.seek(0)
 
-            # Lecture Excel avec openpyxl
-            wb = load_workbook(decrypted, data_only=True)
-            ws = wb.active
-
-            # Conversion en CSV
-            csv_buffer = io.StringIO()
-            writer = csv.writer(csv_buffer, delimiter=";")
-            for row in ws.iter_rows(values_only=True):
-                writer.writerow([cell if cell is not None else "" for cell in row])
-            csv_buffer.seek(0)
-
-            csv_name = f.filename.rsplit(".", 1)[0] + "_unlocked.csv"
+            # Nom du fichier exporté
+            xlsx_name = f.filename.rsplit(".", 1)[0] + "_unlocked.xlsx"
 
             return send_file(
-                io.BytesIO(csv_buffer.getvalue().encode("utf-8")),
+                decrypted,
                 as_attachment=True,
-                download_name=csv_name,
-                mimetype="text/csv"
+                download_name=xlsx_name,
+                mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
 
         except Exception:
-            flash("❌ Mot de passe incorrect ou fichier corrompu", "danger")
+            flash("Mot de passe incorrect ou fichier corrompu", "danger")
             return redirect(url_for("index"))
 
     from datetime import datetime
