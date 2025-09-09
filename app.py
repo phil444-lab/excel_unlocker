@@ -14,7 +14,7 @@ UPLOAD_FOLDER = tempfile.gettempdir()
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 # ---------------------------
-# Déverrouillage -> retourne CSV
+# Déverrouillage -> retourne CSV avec toutes les feuilles
 # ---------------------------
 @app.route("/", methods=["GET", "POST"])
 @app.route("/unlock", methods=["GET", "POST"])
@@ -36,16 +36,22 @@ def unlock():
             # Lire le fichier Excel déverrouillé
             xls = pd.ExcelFile(decrypted)
 
-            # Choisir la première feuille (ou tu peux en fusionner plusieurs si besoin)
-            df = pd.read_excel(xls, sheet_name=xls.sheet_names[0])
+            # Fusionner toutes les feuilles dans un seul DataFrame
+            df_list = []
+            for sheet in xls.sheet_names:
+                df = pd.read_excel(xls, sheet_name=sheet)
+                df.insert(0, "__Feuille__", sheet)  # garde le nom de la feuille en première colonne
+                df_list.append(df)
+
+            merged_df = pd.concat(df_list, ignore_index=True)
 
             # Conversion en CSV
             csv_buffer = io.StringIO()
-            df.to_csv(csv_buffer, index=False, encoding="utf-8-sig")
+            merged_df.to_csv(csv_buffer, index=False, encoding="utf-8-sig")
             csv_buffer.seek(0)
 
             # Nom du fichier exporté
-            csv_name = f.filename.rsplit(".", 1)[0] + "_unlocked.csv"
+            csv_name = f.filename.rsplit(".", 1)[0] + "_all_sheets.csv"
 
             return send_file(
                 io.BytesIO(csv_buffer.getvalue().encode("utf-8-sig")),
@@ -53,9 +59,11 @@ def unlock():
                 download_name=csv_name,
                 mimetype="text/csv"
             )
+
         except Exception as e:
             flash(f"Erreur : {str(e)}", "danger")
             return redirect(url_for("unlock"))
+
     return render_template("unlock.html", year=datetime.now().year, active="unlock")
 
 # ---------------------------
