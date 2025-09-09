@@ -112,21 +112,16 @@ def search():
                 # Découpage des mots-clés
                 keywords = query.split()
 
-                # Recherche AND (toutes les occurrences dans la même ligne)
-                mask_and = df.apply(
-                    lambda row: all(
-                        row.astype(str).str.contains(word, case=False, na=False).any()
-                        for word in keywords
-                    ),
-                    axis=1
-                )
+                # Concaténation des colonnes en une seule chaîne par ligne
+                df_str = df.astype(str).agg(" ".join, axis=1)
+
+                # Recherche AND
+                mask_and = df_str.apply(lambda x: all(word.lower() in x.lower() for word in keywords))
                 filtered = df[mask_and]
 
-                # Si aucun résultat, on tente OR (au moins un mot)
+                # Si aucun résultat, recherche OR
                 if filtered.empty:
-                    mask_or = pd.Series(False, index=df.index)
-                    for word in keywords:
-                        mask_or |= df.apply(lambda row: row.astype(str).str.contains(word, case=False, na=False).any(), axis=1)
+                    mask_or = df_str.apply(lambda x: any(word.lower() in x.lower() for word in keywords))
                     filtered = df[mask_or]
 
                 if not filtered.empty:
