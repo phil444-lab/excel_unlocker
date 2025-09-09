@@ -1,142 +1,138 @@
-from flask import Flask, request, send_file, render_template_string, redirect, url_for, flash
+from flask import Flask, request, send_file, render_template, redirect, url_for, flash, session
 import msoffcrypto
 import io
 import os
+import pandas as pd
+from datetime import datetime
+import tempfile
 
 app = Flask(__name__)
 app.secret_key = "une_cle_ultra_secrete"
 
-HTML_TEMPLATE = """
-<!doctype html>
-<html lang="fr">
-<head>
-  <meta charset="utf-8">
-  <title>Déverrouiller Excel</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <style>
-    body { padding-top: 70px; }
-    footer { background: #f8f9fa; padding: 15px 0; margin-top: 40px; }
-    .card { border-radius: 1rem; }
-    .toast-container { position: fixed; top: 1rem; right: 1rem; z-index: 2000; }
-  </style>
-</head>
-<body class="d-flex flex-column min-vh-100">
+# Dossier temporaire pour stocker les fichiers uploadés
+UPLOAD_FOLDER = tempfile.gettempdir()
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-  <!-- Navbar -->
-  <nav class="navbar navbar-expand-lg navbar-dark bg-success fixed-top shadow-sm">
-    <div class="container">
-      <a class="navbar-brand fw-bold" href="{{ url_for('index') }}">Excel Unlocker 🔓</a>
-      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent">
-        <span class="navbar-toggler-icon"></span>
-      </button>
-      <div class="collapse navbar-collapse" id="navbarContent">
-        <ul class="navbar-nav ms-auto">
-          <li class="nav-item"><a class="nav-link active" href="{{ url_for('index') }}">Accueil</a></li>
-          <li class="nav-item"><a class="nav-link" href="#">Aide</a></li>
-        </ul>
-      </div>
-    </div>
-  </nav>
-
-  <!-- Contenu principal -->
-  <main class="flex-fill">
-    <div class="container py-5">
-      <div class="row justify-content-center">
-        <div class="col-lg-6 col-md-8">
-          <div class="card shadow-lg">
-            <div class="card-body p-4">
-              <h2 class="text-center mb-4 text-success">Déverrouiller un fichier Excel</h2>
-              <form method="post" enctype="multipart/form-data" class="needs-validation" novalidate>
-                <div class="mb-3">
-                  <label for="file" class="form-label">Fichier Excel protégé</label>
-                  <input class="form-control" type="file" name="file" id="file" accept=".xlsx,.xls" required>
-                </div>
-                <div class="mb-3">
-                  <label for="password" class="form-label">Mot de passe</label>
-                  <input class="form-control" type="password" name="password" id="password" placeholder="Entrez le mot de passe" required>
-                </div>
-                <div class="d-grid">
-                  <button type="submit" class="btn btn-success btn-lg">Déverrouiller & Télécharger</button>
-                </div>
-              </form>
-            </div>
-          </div>
-          <p class="text-center text-muted small mt-3">
-            ⚠️ Vos fichiers sont traités uniquement en mémoire, rien n’est stocké sur le serveur.
-          </p>
-        </div>
-      </div>
-    </div>
-  </main>
-
-  <!-- Footer -->
-  <footer class="mt-auto">
-    <div class="container text-center">
-      <p class="mb-0 text-success">&copy; {{ year }} Excel Unlocker – Tous droits réservés</p>
-    </div>
-  </footer>
-
-  <!-- Toasts -->
-  <div class="toast-container">
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        {% for category, msg in messages %}
-          <div class="toast align-items-center text-bg-{{ category }} border-0 mb-2" role="alert" aria-live="assertive" aria-atomic="true">
-            <div class="d-flex">
-              <div class="toast-body">{{ msg }}</div>
-              <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
-            </div>
-          </div>
-        {% endfor %}
-      {% endif %}
-    {% endwith %}
-  </div>
-
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-  <script>
-    document.querySelectorAll('.toast').forEach(toastEl => {
-      new bootstrap.Toast(toastEl, { delay: 4000 }).show();
-    });
-  </script>
-</body>
-</html>
-"""
-
+# ---------------------------
+# Déverrouillage
+# ---------------------------
 @app.route("/", methods=["GET", "POST"])
-def index():
+@app.route("/unlock", methods=["GET", "POST"])
+def unlock():
     if request.method == "POST":
         f = request.files.get("file")
         pwd = request.form.get("password")
-
         if not f or not pwd:
             flash("Fichier ou mot de passe manquant", "warning")
-            return redirect(url_for("index"))
-
+            return redirect(url_for("unlock"))
         try:
-            # Déchiffrement en mémoire
             office_file = msoffcrypto.OfficeFile(f)
             office_file.load_key(password=pwd)
             decrypted = io.BytesIO()
             office_file.decrypt(decrypted)
             decrypted.seek(0)
-
-            # Nom du fichier exporté
             xlsx_name = f.filename.rsplit(".", 1)[0] + "_unlocked.xlsx"
-
             return send_file(
                 decrypted,
                 as_attachment=True,
                 download_name=xlsx_name,
                 mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
-
         except Exception:
             flash("Mot de passe incorrect ou fichier corrompu", "danger")
-            return redirect(url_for("index"))
+            return redirect(url_for("unlock"))
+    return render_template("unlock.html", year=datetime.now().year, active="unlock")
 
-    from datetime import datetime
-    return render_template_string(HTML_TEMPLATE, year=datetime.now().year)
+# ---------------------------
+# Recherche avec possibilité de remplacer le fichier
+# ---------------------------
+@app.route("/search", methods=["GET", "POST"])
+def search():
+    results = {}
+    query = ""
+    file_name = session.get("file_name")
+    sheet_names = session.get("sheet_names", [])
+    selected_sheet = session.get("selected_sheet")
+    file_path = session.get("file_path")
+
+    if request.method == "POST":
+        # Upload ou remplacement de fichier
+        if "file" in request.files and request.files["file"].filename != "":
+            f = request.files["file"]
+            ext = f.filename.rsplit(".", 1)[-1].lower()
+            if ext not in ["xlsx", "xls", "csv"]:
+                flash("Format de fichier non supporté", "danger")
+                return redirect(url_for("search"))
+
+            # Sauvegarde temporaire côté serveur
+            tmp_path = os.path.join(tempfile.gettempdir(), f.filename)
+            f.save(tmp_path)
+
+            # Remplacer l'ancien fichier si existant
+            if file_path and os.path.exists(file_path) and file_path != tmp_path:
+                try:
+                    os.remove(file_path)
+                except Exception:
+                    pass
+
+            # Mettre à jour la session
+            session["file_path"] = tmp_path
+            session["file_name"] = f.filename
+
+            if ext in ["xlsx", "xls"]:
+                xls = pd.ExcelFile(tmp_path)
+                session["sheet_names"] = xls.sheet_names
+                session["selected_sheet"] = xls.sheet_names[0]
+            else:
+                session["sheet_names"] = ["CSV"]
+                session["selected_sheet"] = "CSV"
+
+            flash(f"Fichier '{f.filename}' chargé avec succès.", "success")
+            return redirect(url_for("search"))
+
+        # Changement de feuille
+        if "sheet" in request.form:
+            selected_sheet = request.form["sheet"]
+            session["selected_sheet"] = selected_sheet
+
+        # Recherche
+        if "query" in request.form:
+            query = request.form["query"].strip()
+            if not file_path or not query:
+                flash("Aucun fichier chargé ou mot-clé vide", "warning")
+                return redirect(url_for("search"))
+
+            ext = file_path.rsplit(".", 1)[-1].lower()
+            try:
+                if ext in ["xlsx", "xls"]:
+                    df = pd.read_excel(file_path, sheet_name=selected_sheet)
+                else:
+                    df = pd.read_csv(file_path)
+
+                mask = df.apply(lambda row: row.astype(str).str.contains(query, case=False, na=False).any(), axis=1)
+                filtered = df[mask]
+                
+                if not filtered.empty:
+                    filtered = filtered.fillna("Aucune")
+                    
+                    results[selected_sheet] = filtered.to_html(
+                        classes="table table-sm table-bordered table-striped", index=False
+                    )
+                else:
+                    flash("Aucun résultat trouvé", "info")
+            except Exception as e:
+                flash(f"Erreur lors de la lecture du fichier : {str(e)}", "danger")
+
+    return render_template(
+        "search.html",
+        year=datetime.now().year,
+        results=results,
+        query=query,
+        active="search",
+        file_name=file_name,
+        sheet_names=sheet_names,
+        selected_sheet=selected_sheet
+    )
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))

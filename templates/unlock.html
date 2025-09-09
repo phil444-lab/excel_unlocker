@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-6 col-md-8">
+    <div class="card shadow-lg">
+      <div class="card-body p-4">
+        <h2 class="text-center mb-4 text-success">Déverrouiller un fichier Excel</h2>
+        <form method="post" enctype="multipart/form-data" class="needs-validation" novalidate>
+          <div class="mb-3">
+            <label for="file" class="form-label">Fichier Excel protégé</label>
+            <input class="form-control" type="file" name="file" id="file" accept=".xlsx,.xls" required>
+          </div>
+          <div class="mb-3">
+            <label for="password" class="form-label">Mot de passe</label>
+            <input class="form-control" type="password" name="password" id="password" placeholder="Entrez le mot de passe" required>
+          </div>
+          <div class="d-grid">
+            <button type="submit" class="btn btn-success btn-lg">Déverrouiller & Télécharger</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    <p class="text-center text-muted small mt-3">
+      ⚠️ Vos fichiers sont traités uniquement en mémoire, rien n’est stocké sur le serveur.
+    </p>
+  </div>
+</div>
+{% endblock %}

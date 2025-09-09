@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container py-4">
+
+  <!-- Titre -->
+  <div class="mb-4 text-center">
+    <h2 class="text-success">Recherche dans un fichier Excel/CSV</h2>
+  </div>
+
+  <!-- Section Upload / Remplacement -->
+  <div class="mb-4 p-4 bg-light rounded shadow-sm">
+    {% if file_name %}
+      <p><strong>Fichier actuel :</strong> {{ file_name }}</p>
+      <form method="post" enctype="multipart/form-data" class="row g-3 align-items-center">
+        <div class="col-md-8">
+          <input class="form-control" type="file" name="file" id="file" accept=".xlsx,.xls,.csv">
+        </div>
+        <div class="col-md-4 d-grid">
+          <button type="submit" class="btn btn-warning">Remplacer</button>
+        </div>
+      </form>
+    {% else %}
+      <form method="post" enctype="multipart/form-data" class="row g-3 align-items-center">
+        <div class="col-md-8">
+          <input class="form-control" type="file" name="file" id="file" accept=".xlsx,.xls,.csv" required>
+        </div>
+        <div class="col-md-4 d-grid">
+          <button type="submit" class="btn btn-success">Charger le fichier</button>
+        </div>
+      </form>
+    {% endif %}
+  </div>
+
+  <!-- Section Recherche -->
+  {% if file_name %}
+    <div class="mb-4 p-4 bg-light rounded shadow-sm">
+      <form method="post" class="row g-3 align-items-end" id="search-form">
+        {% if sheet_names|length > 1 %}
+          <div class="col-md-4">
+            <label for="sheet" class="form-label">Choisir une feuille</label>
+            <select name="sheet" id="sheet" class="form-select" onchange="this.form.submit()">
+              {% for sheet in sheet_names %}
+                <option value="{{ sheet }}" {% if sheet == selected_sheet %}selected{% endif %}>{{ sheet }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        {% endif %}
+        <div class="col-md-6">
+          <label for="query" class="form-label">Recherche</label>
+          <input class="form-control" type="text" name="query" id="query" placeholder="Entrez un mot-clé" value="{{ query }}">
+        </div>
+        <div class="col-md-2 d-grid">
+          <button type="submit" class="btn btn-success">Rechercher</button>
+        </div>
+      </form>
+
+      <!-- Loader caché par défaut -->
+      <div id="loading-spinner" class="text-center mt-3" style="display: none;">
+        <div class="spinner-border text-success" role="status">
+          <span class="visually-hidden">Chargement...</span>
+        </div>
+        <p class="mt-2">Recherche en cours...</p>
+      </div>
+    </div>
+  {% endif %}
+
+  <!-- Résultats -->
+  {% if results %}
+    <div class="mb-4">
+      <h5 class="text-success mb-3">Résultats pour "{{ query }}" :</h5>
+      {% for sheet_name, df_html in results.items() %}
+        <h6 class="mt-3">{{ sheet_name }}</h6>
+        <div class="table-responsive mb-4">
+          {{ df_html | safe }}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+</div>
+
+<!-- Script pour gérer l'affichage du loader -->
+<script>
+  document.getElementById("search-form")?.addEventListener("submit", function() {
+    document.getElementById("loading-spinner").style.display = "block";
+  });
+</script>
+{% endblock %}
