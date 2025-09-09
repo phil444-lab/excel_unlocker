@@ -14,7 +14,7 @@ UPLOAD_FOLDER = tempfile.gettempdir()
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 # ---------------------------
-# Déverrouillage
+# Déverrouillage -> retourne CSV
 # ---------------------------
 @app.route("/", methods=["GET", "POST"])
 @app.route("/unlock", methods=["GET", "POST"])
@@ -26,20 +26,35 @@ def unlock():
             flash("Fichier ou mot de passe manquant", "warning")
             return redirect(url_for("unlock"))
         try:
+            # Déverrouillage du fichier Excel
             office_file = msoffcrypto.OfficeFile(f)
             office_file.load_key(password=pwd)
             decrypted = io.BytesIO()
             office_file.decrypt(decrypted)
             decrypted.seek(0)
-            xlsx_name = f.filename.rsplit(".", 1)[0] + "_unlocked.xlsx"
+
+            # Lire le fichier Excel déverrouillé
+            xls = pd.ExcelFile(decrypted)
+
+            # Choisir la première feuille (ou tu peux en fusionner plusieurs si besoin)
+            df = pd.read_excel(xls, sheet_name=xls.sheet_names[0])
+
+            # Conversion en CSV
+            csv_buffer = io.StringIO()
+            df.to_csv(csv_buffer, index=False, encoding="utf-8-sig")
+            csv_buffer.seek(0)
+
+            # Nom du fichier exporté
+            csv_name = f.filename.rsplit(".", 1)[0] + "_unlocked.csv"
+
             return send_file(
-                decrypted,
+                io.BytesIO(csv_buffer.getvalue().encode("utf-8-sig")),
                 as_attachment=True,
-                download_name=xlsx_name,
-                mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                download_name=csv_name,
+                mimetype="text/csv"
             )
-        except Exception:
-            flash("Mot de passe incorrect ou fichier corrompu", "danger")
+        except Exception as e:
+            flash(f"Erreur : {str(e)}", "danger")
             return redirect(url_for("unlock"))
     return render_template("unlock.html", year=datetime.now().year, active="unlock")
 
