@@ -109,9 +109,26 @@ def search():
                 else:
                     df = pd.read_csv(file_path)
 
-                mask = df.apply(lambda row: row.astype(str).str.contains(query, case=False, na=False).any(), axis=1)
-                filtered = df[mask]
-                
+                # Découpage des mots-clés
+                keywords = query.split()
+
+                # Recherche AND (toutes les occurrences dans la même ligne)
+                mask_and = df.apply(
+                    lambda row: all(
+                        row.astype(str).str.contains(word, case=False, na=False).any()
+                        for word in keywords
+                    ),
+                    axis=1
+                )
+                filtered = df[mask_and]
+
+                # Si aucun résultat, on tente OR (au moins un mot)
+                if filtered.empty:
+                    mask_or = pd.Series(False, index=df.index)
+                    for word in keywords:
+                        mask_or |= df.apply(lambda row: row.astype(str).str.contains(word, case=False, na=False).any(), axis=1)
+                    filtered = df[mask_or]
+
                 if not filtered.empty:
                     filtered = filtered.fillna("Aucune")
                     
